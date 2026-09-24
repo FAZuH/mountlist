@@ -1,0 +1,106 @@
+classDiagram
+    direction LR
+
+    class MountIdentity {
+        -String device
+        -PathBuf filesystem_root
+        +new(device, filesystem_root) MountIdentity
+    }
+
+    class DesiredMount {
+        -String key
+        -PathBuf source
+        -PathBuf target
+        -MountIdentity source_identity
+        +new(key, source, target, source_identity) DesiredMount
+    }
+
+    class ObservedMount {
+        -PathBuf target
+        -MountIdentity source_identity
+        +new(target, source_identity) ObservedMount
+    }
+
+    class TargetKind {
+        <<enumeration>>
+        Missing
+        EmptyDirectory
+        NonEmptyDirectory
+        File
+        Symlink
+        Other
+    }
+
+    class TargetState {
+        -PathBuf path
+        -TargetKind kind
+        +new(path, kind) TargetState
+        +kind() TargetKind
+    }
+
+    class SystemSnapshot {
+        -DesiredMount[] desired
+        -ObservedMount[] observed
+        -TargetState[] targets
+        +desired() DesiredMount[]
+        +observed() ObservedMount[]
+        +targets() TargetState[]
+    }
+
+    class MountState {
+        <<enumeration>>
+        Unmounted
+        Mounted
+    }
+
+    class MountAction {
+        <<enumeration>>
+        Mount
+        None
+    }
+
+    class PlanEntry {
+        -String key
+        -PathBuf source
+        -PathBuf target
+        -MountState state
+        -MountAction action
+        +key() String
+        +source() Path
+        +target() Path
+        +state() MountState
+        +action() MountAction
+    }
+
+    class Plan {
+        -PlanEntry[] entries
+        -PathBuf[] prune_targets
+        +entries() PlanEntry[]
+        +prune_targets() PathBuf[]
+    }
+
+    class ReconcileError {
+        <<error>>
+        SymlinkTarget
+        NonEmptyTarget
+        UnsupportedTarget
+        UnexpectedMount
+        MissingTargetState
+    }
+
+    class Reconcile {
+        <<module>>
+        +reconcile(desired, observed, targets) Plan
+    }
+
+    MountIdentity <-- DesiredMount
+    MountIdentity <-- ObservedMount
+    TargetKind <-- TargetState
+    SystemSnapshot *-- DesiredMount
+    SystemSnapshot *-- ObservedMount
+    SystemSnapshot *-- TargetState
+    MountState <-- PlanEntry
+    MountAction <-- PlanEntry
+    Plan *-- PlanEntry
+    Reconcile ..> Plan : produces
+    Reconcile ..> ReconcileError : returns

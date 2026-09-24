@@ -1,0 +1,55 @@
+classDiagram
+    direction LR
+
+    class RawManifest {
+        <<input>>
+        -u64 version
+        -String device
+        -PathBuf root
+        -Shares shares
+    }
+
+    class Shares {
+        <<input>>
+        -BTreeMap values
+    }
+
+    class Manifest {
+        -String device
+        -PathBuf root
+        -Share[] shares
+        +load(path) Manifest
+        +device() String
+        +root() Path
+        +shares() Share[]
+    }
+
+    class Share {
+        -String key
+        -PathBuf source
+        -PathBuf target
+        +key() String
+        +source() Path
+        +target() Path
+    }
+
+    class ManifestError {
+        <<error>>
+        Read
+        Parse
+        UnsupportedVersion
+        RelativePath
+        UnsafeRoot
+        MissingSource
+        InspectSource
+        InvalidShareKey
+        SourceInsideRoot
+        InspectRoot
+        BasenameMismatch
+    }
+
+    RawManifest --> Shares : parses
+    RawManifest ..> Manifest : validates into
+    Shares ..> Manifest : ordered entries
+    Manifest *-- Share
+    Manifest ..> ManifestError : returns

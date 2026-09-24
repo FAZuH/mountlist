@@ -1,0 +1,6 @@
+version: 1
+device: generic-host
+root: /srv/shared
+shares:
+  documents: /srv/data/documents
+  photos: /srv/data/photos
