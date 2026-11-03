@@ -20,9 +20,9 @@ The crate has one binary and one library. The binary handles the command line. T
 
 ### `src/main.rs`
 
-`main.rs` defines the command-line interface and coordinates one command. The global `--config` option selects a manifest path. The command is one of `plan`, `status`, `apply`, or `prune`.
+`main.rs` defines the command-line interface and coordinates one command. The global `--config` option selects a manifest path. The command is one of `plan`, `status`, `apply`, `unmount`, or `prune`.
 
-The module also defines the default manifest path. It uses `$HOME/.config/shared-mounts/config.yaml`. `apply` and `prune` call the root check before they load the manifest. The module prints plans and runs the action selected by the command.
+The module also defines the default manifest path. It uses `$HOME/.config/shared-mounts/config.yaml`. `apply`, `unmount`, and `prune` call the root check before they load the manifest. The module prints plans and runs the action selected by the command.
 
 ### `src/config.rs`
 
@@ -49,7 +49,7 @@ The class diagram for the configuration and data model is at [`docs/diagrams/con
 All commands follow the same inspection flow:
 
 1. `main.rs` parses the command line with `clap`.
-2. For `apply` and `prune`, `main.rs` requires effective user ID 0.
+2. For `apply`, `unmount`, and `prune`, `main.rs` requires effective user ID 0.
 3. The command selects `--config` or the default path under `$HOME`.
 4. `Manifest::load` reads and validates the YAML manifest.
 5. `inspect_system` reads the current system and builds a `SystemSnapshot`.
@@ -61,9 +61,10 @@ The command behavior differs after the plan is built:
 - `plan` prints each desired share and labels a missing mount as `mount`. It labels a matching mount as `mounted`.
 - `status` prints the observed state. It labels a desired mount as `mounted` or `missing`.
 - `apply` calls `prepare_target` and `mount_bind` for every entry whose action is `Mount`.
+- `unmount` calls `umount` for every desired target that is currently mounted.
 - `prune` calls `umount` for every stale target in the plan.
 
-`apply` and `prune` inspect the complete system before they change it. A reconciliation error stops the command before any action runs.
+`apply`, `unmount`, and `prune` inspect the complete system before they change it. A reconciliation error stops the command before any action runs.
 
 ## Configuration and system snapshot
 
@@ -146,11 +147,13 @@ mount --bind -- SOURCE TARGET
 
 The `--` option ends command options before the path arguments. A non-zero command status becomes a `MountError::Command` with the command, status, and standard error text.
 
-### Removing a stale mount
+### Removing a mount
+
+`unmount` calls `umount -- TARGET` for each desired target whose state is `Mounted`. It skips `Unmounted` targets, so a second run is a no-op.
 
 `prune` calls `umount -- TARGET` for each stale target. It unmounts stale targets in deepest-first order. A non-zero command status becomes a `MountError::Command`.
 
-`prune` does not delete target directories. It does not change source files. The `--yes` option is required by the CLI before this action runs.
+`unmount` and `prune` do not delete target directories. They do not change source files. `prune` requires the `--yes` option.
 
 ## Domain model and reconciliation
 
@@ -213,11 +216,12 @@ The reconciliation model is shown in [`docs/diagrams/reconciliation-model.mmd`](
 - `apply` never overwrites an existing file target.
 - A mount at a desired target must have the expected source identity.
 - A nested mount below a desired target stops reconciliation.
+- `unmount` removes only desired targets whose observed source identity matches the manifest.
 - `prune` touches only observed mount points below the shared root that are not desired target paths.
 - `prune` unmounts stale nested targets before parent targets.
 - `prune` does not delete target directories or source data.
 
-`apply` and `prune` require effective user ID 0. `require_root` reads `/proc/self/status` and checks the second number in the `Uid:` line. The program does not call `sudo`. A caller must start these commands with the required privileges. `plan` and `status` do not call the root check because they only inspect and print.
+`apply`, `unmount`, and `prune` require effective user ID 0. `require_root` reads `/proc/self/status` and checks the second number in the `Uid:` line. The program does not call `sudo`. A caller must start these commands with the required privileges. `plan` and `status` do not call the root check because they only inspect and print.
 
 The code uses path arguments as separate process arguments. It does not build a shell command string. The Linux commands still control the final mount and unmount behavior.
 
