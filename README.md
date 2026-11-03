@@ -28,10 +28,11 @@ Copy [the example manifest](config.example.yaml) to `~/.config/shared-mounts/con
 mountlist plan
 mountlist status
 sudo mountlist apply
+sudo mountlist unmount
 sudo mountlist prune --yes
 ```
 
-`plan` and `status` do not require root. `apply` creates missing target paths and bind mounts each configured source. `prune --yes` only unmounts mount points under the shared root that are no longer in the manifest. It never deletes target directories or changes source files.
+`plan` and `status` do not require root. `apply` creates missing target paths and bind mounts each configured source. `unmount` removes each configured source that is currently mounted. `prune --yes` only unmounts mount points under the shared root that are no longer in the manifest. None of them delete target directories or change source files.
 
 Use `--config PATH` to select another manifest.
 

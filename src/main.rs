@@ -7,6 +7,7 @@ use mountlist::Manifest;
 use mountlist::ManifestError;
 use mountlist::MountAction;
 use mountlist::MountError;
+use mountlist::MountState;
 use mountlist::Plan;
 use mountlist::PrivilegeError;
 use mountlist::ReconcileError;
@@ -34,9 +35,22 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    /// Print the action needed for each share: mount or mounted.
     Plan,
+    /// Print only the observed state of each target: mounted or missing.
     Status,
+    /// Create missing targets and bind mount each share.
+    ///
+    /// Requires root.
     Apply,
+    /// Unmount each manifest share that is currently mounted.
+    ///
+    /// Requires root. Stale mounts are left for `prune`. Target directories and
+    /// sources are left untouched.
+    Unmount,
+    /// Unmount mount points under the shared root that the manifest no longer lists.
+    ///
+    /// Requires root. Target directories and sources are left untouched.
     Prune {
         #[arg(long, required = true, action = clap::ArgAction::SetTrue)]
         _yes: bool,
@@ -54,7 +68,10 @@ fn main() -> ExitCode {
 }
 
 fn run(cli: Cli) -> Result<(), CliError> {
-    if matches!(cli.command, Command::Apply | Command::Prune { .. }) {
+    if matches!(
+        cli.command,
+        Command::Apply | Command::Unmount | Command::Prune { .. }
+    ) {
         require_root()?;
     }
     let config = cli.config.map_or_else(default_config_path, Ok)?;
@@ -72,6 +89,7 @@ fn run(cli: Cli) -> Result<(), CliError> {
             Ok(())
         }
         Command::Apply => apply(&plan),
+        Command::Unmount => unmount_shares(&plan),
         Command::Prune { .. } => prune(&plan),
     }
 }
@@ -91,6 +109,17 @@ fn apply(plan: &Plan) -> Result<(), CliError> {
         prepare_target(entry.source(), entry.target())?;
         mount_bind(entry.source(), entry.target())?;
         println!("mounted {} at {}", entry.key(), entry.target().display());
+    }
+    Ok(())
+}
+
+fn unmount_shares(plan: &Plan) -> Result<(), CliError> {
+    for entry in plan.entries() {
+        if entry.state() != MountState::Mounted {
+            continue;
+        }
+        unmount(entry.target())?;
+        println!("unmounted {} at {}", entry.key(), entry.target().display());
     }
     Ok(())
 }
